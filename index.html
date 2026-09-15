@@ -1,0 +1,220 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Jumpline APNG — frames to animated PNG, in your browser</title>
+<meta name="description" content="Drop in a folder of frames and get an animated PNG back. Adjustable frame timing and output size, multi-threaded encoding, and nothing ever leaves your browser.">
+<meta name="color-scheme" content="dark">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%237c5cff'/%3E%3Cpath d='M12 9l12 7-12 7z' fill='%23fff'/%3E%3C/svg%3E">
+<link rel="stylesheet" href="assets/styles.css">
+</head>
+<body>
+
+<header class="topbar">
+  <div class="brand">
+    <span class="logo" aria-hidden="true">▶</span>
+    <div>
+      <h1>Jumpline <span class="accent">APNG</span></h1>
+      <p>Frames in, animated PNG out. Everything runs locally — no upload, no server.</p>
+    </div>
+  </div>
+  <a class="ghlink" href="https://github.com/rustybusgaming/Jumpline-APNG" target="_blank" rel="noopener">Source</a>
+</header>
+
+<main>
+
+  <section class="panel" id="sourcePanel">
+    <div class="dropzone" id="dropzone" tabindex="0" role="button" aria-label="Add frames">
+      <div class="dz-icon" aria-hidden="true">＋</div>
+      <div class="dz-text">
+        <strong>Drop frames here</strong>
+        <span>or click to browse — PNG, JPEG, WebP, GIF, BMP. You can also paste an image.</span>
+      </div>
+      <input type="file" id="fileInput" accept="image/*" multiple hidden>
+    </div>
+
+    <div class="strip-bar">
+      <span class="count" id="frameCount">No frames yet</span>
+      <div class="spacer"></div>
+      <button class="btn ghost" id="btnSortName" type="button" title="Sort frames by filename">Sort by name</button>
+      <button class="btn ghost" id="btnReverse" type="button" title="Reverse frame order">Reverse</button>
+      <button class="btn ghost" id="btnPingPong" type="button" title="Append the frames back-to-front for a seamless loop">Ping-pong</button>
+      <button class="btn ghost danger" id="btnClear" type="button">Clear</button>
+    </div>
+
+    <ol class="strip" id="strip"></ol>
+    <p class="hint" id="stripHint">Frames play in the order shown. Drag a card to reorder it, or edit the number under it to change how long that single frame is held.</p>
+  </section>
+
+  <div class="columns">
+
+    <section class="panel preview-panel">
+      <h2>Preview</h2>
+      <div class="stage">
+        <canvas id="preview" width="16" height="16"></canvas>
+      </div>
+      <div class="transport">
+        <button class="btn" id="btnPlay" type="button">Pause</button>
+        <input type="range" id="scrub" min="0" max="0" value="0" step="1" aria-label="Frame">
+        <span class="mono" id="playLabel">0 / 0</span>
+      </div>
+      <p class="hint">This is the exact canvas that gets encoded — size, fit and background included.</p>
+    </section>
+
+    <section class="panel settings-panel">
+      <h2>Output</h2>
+
+      <fieldset>
+        <legend>Size</legend>
+        <div class="row">
+          <label class="field">
+            <span>Width</span>
+            <input type="number" id="outW" min="1" max="8000" step="1" value="512">
+          </label>
+          <label class="field">
+            <span>Height</span>
+            <input type="number" id="outH" min="1" max="8000" step="1" value="512">
+          </label>
+          <label class="check lock">
+            <input type="checkbox" id="lockAspect" checked>
+            <span>Lock ratio</span>
+          </label>
+        </div>
+        <div class="row presets">
+          <button class="btn tiny" data-scale="1" type="button">Original</button>
+          <button class="btn tiny" data-scale="0.5" type="button">50%</button>
+          <button class="btn tiny" data-scale="0.25" type="button">25%</button>
+          <button class="btn tiny" data-size="512" type="button">512</button>
+          <button class="btn tiny" data-size="256" type="button">256</button>
+          <button class="btn tiny" data-size="128" type="button">128</button>
+        </div>
+        <div class="row">
+          <label class="field grow">
+            <span>Fit</span>
+            <select id="fitMode">
+              <option value="contain">Contain — fit inside, letterboxed</option>
+              <option value="cover">Cover — fill and crop</option>
+              <option value="stretch">Stretch — ignore aspect ratio</option>
+              <option value="none">Centre — no scaling</option>
+            </select>
+          </label>
+        </div>
+        <div class="row">
+          <label class="check">
+            <input type="checkbox" id="transparent" checked>
+            <span>Transparent background</span>
+          </label>
+          <label class="field colorfield">
+            <span>Colour</span>
+            <input type="color" id="bgColor" value="#000000" disabled>
+          </label>
+        </div>
+        <div class="row">
+          <label class="check">
+            <input type="checkbox" id="pixelArt">
+            <span>Pixel art — no smoothing when scaling</span>
+          </label>
+        </div>
+      </fieldset>
+
+      <fieldset>
+        <legend>Timing</legend>
+        <div class="row">
+          <label class="field">
+            <span>Frame length</span>
+            <div class="suffixed">
+              <input type="number" id="delayMs" min="0" max="65535" step="10" value="100">
+              <em>ms</em>
+            </div>
+          </label>
+          <label class="field">
+            <span>Frame rate</span>
+            <div class="suffixed">
+              <input type="number" id="fps" min="0.1" max="100" step="0.1" value="10">
+              <em>fps</em>
+            </div>
+          </label>
+          <button class="btn tiny apply" id="btnApplyDelay" type="button" title="Overwrite every per-frame length with this value">Apply to all</button>
+        </div>
+        <div class="row">
+          <label class="check">
+            <input type="checkbox" id="loopForever" checked>
+            <span>Loop forever</span>
+          </label>
+          <label class="field">
+            <span>Plays</span>
+            <input type="number" id="loopCount" min="1" max="100000" step="1" value="1" disabled>
+          </label>
+        </div>
+      </fieldset>
+
+      <fieldset>
+        <legend>Encoding</legend>
+        <div class="row">
+          <label class="field grow">
+            <span>Compression</span>
+            <select id="filterMode">
+              <option value="0">Fast — least CPU, largest file</option>
+              <option value="1" selected>Balanced</option>
+              <option value="2">Smallest — slowest</option>
+            </select>
+          </label>
+          <label class="field">
+            <span>Threads</span>
+            <select id="threads">
+              <option value="0" selected>Auto</option>
+              <option value="1">1</option>
+              <option value="2">2</option>
+              <option value="4">4</option>
+              <option value="8">8</option>
+            </select>
+          </label>
+        </div>
+        <div class="row">
+          <label class="check">
+            <input type="checkbox" id="optimize" checked>
+            <span>Optimise — store only what changes between frames</span>
+          </label>
+        </div>
+      </fieldset>
+
+      <fieldset>
+        <legend>Export</legend>
+        <div class="row">
+          <label class="field grow">
+            <span>File name</span>
+            <input type="text" id="fileName" value="animation.png" spellcheck="false">
+          </label>
+        </div>
+        <button class="btn primary big" id="btnExport" type="button" disabled>Build APNG</button>
+        <div class="progress" id="progress" hidden>
+          <div class="bar"><div class="fill" id="progressFill"></div></div>
+          <span class="mono" id="progressLabel">0%</span>
+        </div>
+        <div class="result" id="result" hidden>
+          <div class="result-preview"><img id="resultImg" alt="Encoded animation"></div>
+          <dl class="result-stats">
+            <div><dt>Size</dt><dd id="statSize">—</dd></div>
+            <div><dt>Dimensions</dt><dd id="statDims">—</dd></div>
+            <div><dt>Frames</dt><dd id="statFrames">—</dd></div>
+            <div><dt>Encode time</dt><dd id="statTime">—</dd></div>
+          </dl>
+          <a class="btn primary big" id="btnDownload" download>Download</a>
+        </div>
+        <p class="error" id="error" hidden></p>
+      </fieldset>
+    </section>
+
+  </div>
+</main>
+
+<footer>
+  <p>APNG files play in Chrome, Firefox, Safari and Edge — anywhere a normal PNG works, so you can use one as an <code>&lt;img&gt;</code>, an emoji or a sticker.</p>
+</footer>
+
+<script src="src/png.js"></script>
+<script src="src/encode-core.js"></script>
+<script src="src/app.js"></script>
+</body>
+</html>
