@@ -800,7 +800,7 @@
         });
       }
 
-      var stem = (el.fileName.value || 'animation').trim().replace(/\.png$/i, '') || 'animation';
+      var stem = (el.fileName.value || 'animation').trim().replace(/\.a?png$/i, '') || 'animation';
       downloadBlob(self.Zip.build(entries), stem + '-frames.zip');
       announce('Saved ' + entries.length + ' frames as a zip.');
     } catch (err) {
@@ -822,13 +822,14 @@
     el.statFrames.textContent = String(frameCount);
     el.statTime.textContent = ms < 1000 ? Math.round(ms) + ' ms' : (ms / 1000).toFixed(2) + ' s';
 
-    var name = (el.fileName.value || 'animation.png').trim();
-    if (!/\.png$/i.test(name)) name += '.png';
+    var name = (el.fileName.value || 'animation.apng').trim();
+    if (!/\.apng$/i.test(name)) name = name.replace(/\.png$/i, '') + '.apng';
     el.btnDownload.href = state.resultUrl;
     el.btnDownload.download = name;
     el.result.hidden = false;
     announce('Built ' + frameCount + (frameCount === 1 ? ' frame' : ' frames') +
-      ' at ' + opts.width + ' by ' + opts.height + ', ' + formatBytes(blob.size) + '. Ready to download.');
+      ' at ' + opts.width + ' by ' + opts.height + ', ' + formatBytes(blob.size) + '. Downloading now.');
+    el.btnDownload.click();
   }
 
   /* ------------------------------------------------------------------ wire */
