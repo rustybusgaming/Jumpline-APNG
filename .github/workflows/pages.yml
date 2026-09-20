@@ -1,5 +1,7 @@
 name: Deploy to GitHub Pages
 
+# Deploys the site as-is; the repository root is the site, so there is no build
+# step. Pull requests are covered by ci.yml instead, since a PR cannot deploy.
 on:
   push:
     branches: [main, master]
@@ -15,21 +17,12 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  test:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-      - run: npm test
-
   deploy:
-    needs: test
-    runs-on: ubuntu-latest
+    name: Deploy
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: actions/configure-pages@v5

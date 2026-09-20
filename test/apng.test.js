@@ -10,7 +10,9 @@ const ROOT = path.join(__dirname, '..');
 const g = globalThis;
 new Function(fs.readFileSync(path.join(ROOT, 'src/png.js'), 'utf8'))();
 new Function(fs.readFileSync(path.join(ROOT, 'src/encode-core.js'), 'utf8'))();
-const { PNG, EncodeCore } = g;
+new Function(fs.readFileSync(path.join(ROOT, 'src/apng-decode.js'), 'utf8'))();
+new Function(fs.readFileSync(path.join(ROOT, 'src/zip.js'), 'utf8'))();
+const { PNG, EncodeCore, APNGDecode, Zip } = g;
 
 /* ------------------------------------------------------------ independent decoder */
 
@@ -244,7 +246,7 @@ async function encodeAll(sources, opts, threads) {
 let pass = 0, fail = 0;
 function check(name, cond, detail) {
   if (cond) { pass++; console.log('  \x1b[32mok\x1b[0m   ' + name); }
-  else { fail++; console.log('  \x1b[31mFAIL\x1b[0m ' + name + (detail ? '  — ' + detail : '')); }
+  else { fail++; console.log('  \x1b[31mFAIL\x1b[0m ' + name + (detail ? '  : ' + detail : '')); }
 }
 
 function comparePixels(got, want, label) {
@@ -335,6 +337,65 @@ async function run() {
     const { bytes } = await encodeAll(sources, { width: 40, height: 24, optimize: true, filter: 2 }, 1);
     const d = decodeAPNG(bytes);
     check('fading alpha uses the SOURCE blend', d.frames.every(f => f.blend === 0));
+  }
+
+  // The in-page APNG reader must recover exactly what the encoder wrote,
+  // since dropping an exported file back in is how re-editing works.
+  for (const kind of ['opaque-move', 'alpha-fade', 'dupes']) {
+    const count = 8;
+    const W = 40, H = 24;
+    const sources = makeFrames(kind, count, W, H);
+    const { bytes } = await encodeAll(sources, { width: W, height: H, optimize: true, filter: 1 }, 2);
+
+    let decoded = null, problem = null;
+    try { decoded = await APNGDecode.decode(bytes); }
+    catch (e) { problem = e.message; }
+
+    if (!problem) {
+      const expected = decodeAPNG(bytes).frames;   // the independent reader
+      if (decoded.length !== expected.length) {
+        problem = `got ${decoded.length} frames, expected ${expected.length}`;
+      } else {
+        for (let i = 0; i < expected.length && !problem; i++) {
+          problem = comparePixels(decoded[i].rgba, expected[i].pixels, `frame ${i}`);
+        }
+      }
+      if (!problem && decoded.some(f => f.delay !== 100 && f.delay % 100 !== 0)) {
+        problem = 'frame delays did not survive the round trip';
+      }
+    }
+    check(`APNGDecode round-trips ${kind} (${decoded ? decoded.length : 0} frames)`, !problem, problem);
+  }
+
+  check('APNGDecode rejects a still PNG', await (async () => {
+    const still = Buffer.concat([
+      Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]),
+      PNG.chunk('IHDR', (() => { const d = new Uint8Array(13); new DataView(d.buffer).setUint32(0, 4);
+        new DataView(d.buffer).setUint32(4, 4); d[8] = 8; d[9] = 6; return d; })()),
+      PNG.chunk('IEND', new Uint8Array(0)),
+    ]);
+    try { await APNGDecode.decode(new Uint8Array(still)); return false; } catch (e) { return /not animated/i.test(e.message); }
+  })());
+
+  // Zip container: signatures, entry count and CRCs have to be right or the
+  // OS archiver refuses the file.
+  {
+    const files = [
+      { name: '001.png', data: new Uint8Array([1, 2, 3, 4, 5]) },
+      { name: '002.png', data: new Uint8Array(300).fill(7) },
+    ];
+    const buf = Buffer.from(await Zip.build(files).arrayBuffer());
+    const eocdAt = buf.length - 22;
+    const centralCount = buf.readUInt16LE(eocdAt + 10);
+    const centralAt = buf.readUInt32LE(eocdAt + 16);
+    let ok = buf.readUInt32LE(0) === 0x04034b50 &&
+             buf.readUInt32LE(eocdAt) === 0x06054b50 &&
+             buf.readUInt32LE(centralAt) === 0x02014b50 &&
+             centralCount === 2;
+    // First entry's stored CRC must match its data.
+    const crc = PNG.crc32(files[0].data, 0, files[0].data.length);
+    ok = ok && buf.readUInt32LE(14) === crc && buf.readUInt32LE(18) === files[0].data.length;
+    check('Zip.build writes a valid archive', ok);
   }
 
   console.log(`\n${pass} passed, ${fail} failed`);

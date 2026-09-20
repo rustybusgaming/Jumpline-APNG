@@ -1,5 +1,5 @@
 /*
- * png.js — minimal PNG / APNG writing primitives.
+ * png.js: minimal PNG / APNG writing primitives.
  *
  * Loaded both in the main thread (<script>) and inside the encode worker
  * (importScripts), so it must not touch `document` or `window`.

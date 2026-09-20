@@ -1,0 +1,37 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: Tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Check every script parses
+        run: |
+          for f in src/*.js test/*.js scripts/*.mjs; do
+            node --check "$f" || exit 1
+          done
+          echo "all scripts parse"
+
+      - name: Check index.html references resolve
+        run: node scripts/check-assets.mjs
+
+      - name: Encode and decode round-trip tests
+        run: npm test
