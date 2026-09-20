@@ -3,70 +3,104 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Jumpline APNG — frames to animated PNG, in your browser</title>
+<title>Jumpline APNG, frames to animated PNG in your browser</title>
 <meta name="description" content="Drop in a folder of frames and get an animated PNG back. Adjustable frame timing and output size, multi-threaded encoding, and nothing ever leaves your browser.">
-<meta name="color-scheme" content="dark">
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%237c5cff'/%3E%3Cpath d='M12 9l12 7-12 7z' fill='%23fff'/%3E%3C/svg%3E">
+<meta name="color-scheme" content="light">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%23FFB02E' stroke='%232B2118' stroke-width='2.5'/%3E%3Ccircle cx='16' cy='13' r='6' fill='%23E8453C' stroke='%232B2118' stroke-width='2'/%3E%3Cline x1='6' y1='26' x2='26' y2='26' stroke='%232B2118' stroke-width='2.5' stroke-linecap='round'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@500;600;700;800&family=Luckiest+Guy&display=swap">
 <link rel="stylesheet" href="assets/styles.css">
 </head>
 <body>
 
+<a class="skip-link" href="#main">Skip to the app</a>
+
 <header class="topbar">
   <div class="brand">
-    <span class="logo" aria-hidden="true">▶</span>
+    <div class="logo-wrap">
+      <span class="logo" aria-hidden="true">
+        <svg width="52" height="52" viewBox="0 0 52 52" fill="none">
+          <path d="M7 40 C16 10, 36 10, 45 40" stroke="#2B2118" stroke-width="3" stroke-linecap="round" stroke-dasharray="5 6"/>
+          <ellipse cx="26" cy="19" rx="10" ry="10" fill="#E8453C" stroke="#2B2118" stroke-width="3.2"/>
+          <path d="M23 14.5l7.5 4.5-7.5 4.5z" fill="#FFF8E7" stroke="#2B2118" stroke-width="1.6" stroke-linejoin="round"/>
+          <line x1="6" y1="44" x2="46" y2="44" stroke="#2B2118" stroke-width="3.2" stroke-linecap="round"/>
+        </svg>
+      </span>
+      <span class="logo-burst" aria-hidden="true">
+        <svg width="38" height="38" viewBox="0 0 120 120">
+          <path d="M60 4 L69 30 L93 14 L85 42 L113 39 L92 58 L118 70 L90 76 L105 100 L79 89 L77 117 L60 95 L43 117 L41 89 L15 100 L30 76 L2 70 L28 58 L7 39 L35 42 L27 14 L51 30 Z"
+                fill="#9AD7EF" stroke="#2B2118" stroke-width="3.5" stroke-linejoin="round"/>
+        </svg>
+      </span>
+    </div>
     <div>
       <h1>Jumpline <span class="accent">APNG</span></h1>
-      <p>Frames in, animated PNG out. Everything runs locally — no upload, no server.</p>
+      <p>Frames in, animated PNG out. Everything runs locally: no upload, no server.</p>
     </div>
   </div>
-  <a class="ghlink" href="https://github.com/rustybusgaming/Jumpline-APNG" target="_blank" rel="noopener">Source</a>
+  <a class="ghlink" href="https://github.com/rustybusgaming/Jumpline-APNG" target="_blank" rel="noopener">
+    Source
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 4h6v6M20 4l-9 9M17 14v5H5V7h5"/></svg>
+  </a>
 </header>
 
-<main>
+<main id="main">
 
-  <section class="panel" id="sourcePanel">
-    <div class="dropzone" id="dropzone" tabindex="0" role="button" aria-label="Add frames">
-      <div class="dz-icon" aria-hidden="true">＋</div>
-      <div class="dz-text">
-        <strong>Drop frames here</strong>
-        <span>or click to browse — PNG, JPEG, WebP, GIF, BMP. You can also paste an image.</span>
-      </div>
-      <input type="file" id="fileInput" accept="image/*" multiple hidden>
-    </div>
+  <section class="panel tilt-a" aria-labelledby="addHeading">
+    <h2 id="addHeading" class="visually-hidden">Add frames</h2>
+    <button class="dropzone" id="dropzone" type="button">
+      <span class="dz-icon" aria-hidden="true">
+        <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="#FFF8E7" stroke-width="3.6" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
+      </span>
+      <span class="dz-text">
+        <strong>Drop your frames here!</strong>
+        <span>or click to browse: PNG, JPEG, WebP, GIF, BMP. You can also paste an image, or drop an animated PNG to pull its frames back out.</span>
+      </span>
+    </button>
+    <input type="file" id="fileInput" accept="image/*" multiple hidden>
+  </section>
 
+  <section class="panel tilt-b" aria-labelledby="framesHeading">
+    <h2 id="framesHeading" class="visually-hidden">Frames</h2>
     <div class="strip-bar">
       <span class="count" id="frameCount">No frames yet</span>
-      <div class="spacer"></div>
-      <button class="btn ghost" id="btnSortName" type="button" title="Sort frames by filename">Sort by name</button>
-      <button class="btn ghost" id="btnReverse" type="button" title="Reverse frame order">Reverse</button>
-      <button class="btn ghost" id="btnPingPong" type="button" title="Append the frames back-to-front for a seamless loop">Ping-pong</button>
-      <button class="btn ghost danger" id="btnClear" type="button">Clear</button>
+      <span class="spacer"></span>
+      <button class="btn" id="btnSortName" type="button">Sort by name</button>
+      <button class="btn" id="btnReverse" type="button">Reverse</button>
+      <button class="btn marigold" id="btnPingPong" type="button" title="Append the frames back to front for a seamless loop">Ping-pong</button>
+      <button class="btn danger" id="btnClear" type="button">Clear</button>
     </div>
-
     <ol class="strip" id="strip"></ol>
-    <p class="hint" id="stripHint">Frames play in the order shown. Drag a card to reorder it, or edit the number under it to change how long that single frame is held.</p>
+    <p class="bubble" id="stripHint">Frames play in the order shown. Drag a card to reorder it, or edit the number under it to change how long that single frame is held. With the keyboard, focus a card and use the arrow keys to move it.</p>
   </section>
 
   <div class="columns">
 
-    <section class="panel preview-panel">
-      <h2>Preview</h2>
+    <section class="panel preview-panel" aria-labelledby="previewHeading">
+      <h2 class="tab teal" id="previewHeading">Preview</h2>
       <div class="stage">
-        <canvas id="preview" width="16" height="16"></canvas>
+        <canvas id="preview" width="16" height="16" role="img" aria-label="Animation preview"></canvas>
       </div>
       <div class="transport">
-        <button class="btn" id="btnPlay" type="button">Pause</button>
+        <button class="btn marigold" id="btnPlay" type="button">Pause</button>
         <input type="range" id="scrub" min="0" max="0" value="0" step="1" aria-label="Frame">
-        <span class="mono" id="playLabel">0 / 0</span>
+        <span class="playlabel" id="playLabel">0 / 0</span>
       </div>
-      <p class="hint">This is the exact canvas that gets encoded — size, fit and background included.</p>
+      <div class="row" style="margin-top: 14px;">
+        <label class="check">
+          <input type="checkbox" id="onionSkin">
+          <span>Onion skin: ghost the frame before this one</span>
+        </label>
+      </div>
+      <p class="bubble">This is the exact canvas that gets encoded, including size, fit and background.</p>
     </section>
 
-    <section class="panel settings-panel">
-      <h2>Output</h2>
+    <section class="panel tilt-c" aria-labelledby="outputHeading">
+      <h2 class="tab cherry" id="outputHeading">Output</h2>
 
       <fieldset>
-        <legend>Size</legend>
+        <legend><span class="tab cherry">Size</span></legend>
         <div class="row">
           <label class="field">
             <span>Width</span>
@@ -76,12 +110,12 @@
             <span>Height</span>
             <input type="number" id="outH" min="1" max="8000" step="1" value="512">
           </label>
-          <label class="check lock">
-            <input type="checkbox" id="lockAspect" checked>
+          <label class="check">
+            <input type="checkbox" id="lockAspect" class="teal" checked>
             <span>Lock ratio</span>
           </label>
         </div>
-        <div class="row presets">
+        <div class="row presets" role="group" aria-label="Size presets">
           <button class="btn tiny" data-scale="1" type="button">Original</button>
           <button class="btn tiny" data-scale="0.5" type="button">50%</button>
           <button class="btn tiny" data-scale="0.25" type="button">25%</button>
@@ -93,53 +127,52 @@
           <label class="field grow">
             <span>Fit</span>
             <select id="fitMode">
-              <option value="contain">Contain — fit inside, letterboxed</option>
-              <option value="cover">Cover — fill and crop</option>
-              <option value="stretch">Stretch — ignore aspect ratio</option>
-              <option value="none">Centre — no scaling</option>
+              <option value="contain">Contain (fit inside, letterboxed)</option>
+              <option value="cover">Cover (fill and crop)</option>
+              <option value="stretch">Stretch (ignore aspect ratio)</option>
+              <option value="none">Centre (no scaling)</option>
             </select>
           </label>
         </div>
         <div class="row">
           <label class="check">
-            <input type="checkbox" id="transparent" checked>
+            <input type="checkbox" id="transparent" class="teal" checked>
             <span>Transparent background</span>
           </label>
-          <label class="field colorfield">
-            <span>Colour</span>
-            <input type="color" id="bgColor" value="#000000" disabled>
-          </label>
+          <input type="color" id="bgColor" value="#000000" disabled aria-label="Background colour">
         </div>
         <div class="row">
           <label class="check">
             <input type="checkbox" id="pixelArt">
-            <span>Pixel art — no smoothing when scaling</span>
+            <span>Pixel art: no smoothing when scaling</span>
           </label>
         </div>
       </fieldset>
 
+      <div class="squiggle" aria-hidden="true"></div>
+
       <fieldset>
-        <legend>Timing</legend>
+        <legend><span class="tab marigold">Timing</span></legend>
         <div class="row">
           <label class="field">
             <span>Frame length</span>
-            <div class="suffixed">
+            <span class="suffixed">
               <input type="number" id="delayMs" min="0" max="65535" step="10" value="100">
-              <em>ms</em>
-            </div>
+              <em aria-hidden="true">ms</em>
+            </span>
           </label>
           <label class="field">
             <span>Frame rate</span>
-            <div class="suffixed">
+            <span class="suffixed">
               <input type="number" id="fps" min="0.1" max="100" step="0.1" value="10">
-              <em>fps</em>
-            </div>
+              <em aria-hidden="true">fps</em>
+            </span>
           </label>
-          <button class="btn tiny apply" id="btnApplyDelay" type="button" title="Overwrite every per-frame length with this value">Apply to all</button>
+          <button class="btn go tiny" id="btnApplyDelay" type="button" title="Overwrite every per-frame length with this value">Apply to all</button>
         </div>
         <div class="row">
           <label class="check">
-            <input type="checkbox" id="loopForever" checked>
+            <input type="checkbox" id="loopForever" class="teal" checked>
             <span>Loop forever</span>
           </label>
           <label class="field">
@@ -149,15 +182,17 @@
         </div>
       </fieldset>
 
+      <div class="squiggle" aria-hidden="true"></div>
+
       <fieldset>
-        <legend>Encoding</legend>
+        <legend><span class="tab teal">Encoding</span></legend>
         <div class="row">
           <label class="field grow">
             <span>Compression</span>
             <select id="filterMode">
-              <option value="0">Fast — least CPU, largest file</option>
+              <option value="0">Fast (least CPU, largest file)</option>
               <option value="1" selected>Balanced</option>
-              <option value="2">Smallest — slowest</option>
+              <option value="2">Smallest (tries every filter, slowest)</option>
             </select>
           </label>
           <label class="field">
@@ -174,35 +209,51 @@
         <div class="row">
           <label class="check">
             <input type="checkbox" id="optimize" checked>
-            <span>Optimise — store only what changes between frames</span>
+            <span>Optimise: store only what changes between frames</span>
           </label>
         </div>
       </fieldset>
 
+      <div class="squiggle" aria-hidden="true"></div>
+
       <fieldset>
-        <legend>Export</legend>
+        <legend><span class="tab sky">Export</span></legend>
         <div class="row">
           <label class="field grow">
             <span>File name</span>
             <input type="text" id="fileName" value="animation.png" spellcheck="false">
           </label>
         </div>
-        <button class="btn primary big" id="btnExport" type="button" disabled>Build APNG</button>
+
+        <div class="build-wrap">
+          <span class="burst a" aria-hidden="true">
+            <svg width="78" height="78" viewBox="0 0 120 120"><path d="M60 4 L69 30 L93 14 L85 42 L113 39 L92 58 L118 70 L90 76 L105 100 L79 89 L77 117 L60 95 L43 117 L41 89 L15 100 L30 76 L2 70 L28 58 L7 39 L35 42 L27 14 L51 30 Z" fill="#FFB02E" stroke="#2B2118" stroke-width="3.5" stroke-linejoin="round"/></svg>
+          </span>
+          <span class="burst b" aria-hidden="true">
+            <svg width="58" height="58" viewBox="0 0 120 120"><path d="M60 4 L69 30 L93 14 L85 42 L113 39 L92 58 L118 70 L90 76 L105 100 L79 89 L77 117 L60 95 L43 117 L41 89 L15 100 L30 76 L2 70 L28 58 L7 39 L35 42 L27 14 L51 30 Z" fill="#9AD7EF" stroke="#2B2118" stroke-width="3.5" stroke-linejoin="round"/></svg>
+          </span>
+          <button class="btn primary big" id="btnExport" type="button" disabled>Build APNG!</button>
+        </div>
+
         <div class="progress" id="progress" hidden>
           <div class="bar"><div class="fill" id="progressFill"></div></div>
           <span class="mono" id="progressLabel">0%</span>
         </div>
+
         <div class="result" id="result" hidden>
-          <div class="result-preview"><img id="resultImg" alt="Encoded animation"></div>
+          <div class="result-preview"><img id="resultImg" alt="The animated PNG you just built"></div>
           <dl class="result-stats">
-            <div><dt>Size</dt><dd id="statSize">—</dd></div>
-            <div><dt>Dimensions</dt><dd id="statDims">—</dd></div>
-            <div><dt>Frames</dt><dd id="statFrames">—</dd></div>
-            <div><dt>Encode time</dt><dd id="statTime">—</dd></div>
+            <div><dt>Size</dt><dd id="statSize">0</dd></div>
+            <div><dt>Dimensions</dt><dd id="statDims">0</dd></div>
+            <div><dt>Frames</dt><dd id="statFrames">0</dd></div>
+            <div><dt>Encode time</dt><dd id="statTime">0</dd></div>
           </dl>
-          <a class="btn primary big" id="btnDownload" download>Download</a>
+          <a class="btn go big" id="btnDownload" download>Download</a>
         </div>
-        <p class="error" id="error" hidden></p>
+
+        <button class="btn tiny" id="btnSaveFrames" type="button" style="margin-top: 14px;" disabled>Save frames as a zip</button>
+
+        <p class="notice error" id="error" role="alert" hidden></p>
       </fieldset>
     </section>
 
@@ -210,10 +261,14 @@
 </main>
 
 <footer>
-  <p>APNG files play in Chrome, Firefox, Safari and Edge — anywhere a normal PNG works, so you can use one as an <code>&lt;img&gt;</code>, an emoji or a sticker.</p>
+  <p class="ribbon">APNG files play in Chrome, Firefox, Safari and Edge, anywhere a normal PNG works. Use one as an <code>&lt;img&gt;</code>, an emoji or a sticker.</p>
 </footer>
 
+<div id="live" class="visually-hidden" role="status" aria-live="polite"></div>
+
 <script src="src/png.js"></script>
+<script src="src/apng-decode.js"></script>
+<script src="src/zip.js"></script>
 <script src="src/encode-core.js"></script>
 <script src="src/app.js"></script>
 </body>

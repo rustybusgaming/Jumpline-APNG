@@ -1,5 +1,5 @@
 /*
- * encode-core.js — turns source images into APNG frame payloads.
+ * encode-core.js: turns source images into APNG frame payloads.
  *
  * Runs in a worker when one is available, and on the main thread otherwise, so
  * it only uses APIs that exist in both (no `document` unless OffscreenCanvas is
@@ -31,11 +31,13 @@
   }
 
   /* Draw one source onto the output canvas and read back its pixels. */
-  function paint(ctx, bitmap, opts) {
-    ctx.clearRect(0, 0, opts.width, opts.height);
-    if (opts.background) {
-      ctx.fillStyle = opts.background;
-      ctx.fillRect(0, 0, opts.width, opts.height);
+  function paint(ctx, bitmap, opts, keep) {
+    if (!keep) {
+      ctx.clearRect(0, 0, opts.width, opts.height);
+      if (opts.background) {
+        ctx.fillStyle = opts.background;
+        ctx.fillRect(0, 0, opts.width, opts.height);
+      }
     }
     ctx.imageSmoothingEnabled = opts.smoothing !== false;
     if (ctx.imageSmoothingQuality) ctx.imageSmoothingQuality = 'high';
@@ -138,10 +140,20 @@
     return info.data;
   }
 
-  function compress(rgba, w, h, filterMode) {
-    return global.PNG.hasCompressionStream
-      ? global.PNG.compressFrame(rgba, w, h, filterMode)
-      : compressViaCanvas(rgba, w, h);
+  async function compress(rgba, w, h, filterMode) {
+    if (!global.PNG.hasCompressionStream) return compressViaCanvas(rgba, w, h);
+    if (filterMode !== 2) return global.PNG.compressFrame(rgba, w, h, filterMode);
+
+    // "Smallest": the adaptive heuristic is not always the best choice once
+    // deflate has had its say, so encode each way and keep the shortest.
+    var tries = await Promise.all([0, 1, 2].map(function (mode) {
+      return global.PNG.compressFrame(rgba, w, h, mode);
+    }));
+    var best = tries[0];
+    for (var i = 1; i < tries.length; i++) {
+      if (tries[i].length < best.length) best = tries[i];
+    }
+    return best;
   }
 
   /*
@@ -215,6 +227,21 @@
     return results;
   }
 
+  /*
+   * Segments are encoded in parallel, so each one opens with a full key frame.
+   * Once every segment is back we can revisit those boundaries serially and
+   * store them as deltas instead, which is where the wasted bytes were.
+   *
+   * Returns an encoded delta, or null when the two frames are identical.
+   */
+  async function reencodeAgainst(prevSource, curSource, opts) {
+    var canvas = makeCanvas(opts.width, opts.height);
+    var ctx = canvas.getContext('2d', { willReadFrequently: true });
+    var prev = await renderToRGBA(prevSource, opts, ctx);
+    var cur = await renderToRGBA(curSource, opts, ctx);
+    return encodeFrame(prev, cur, opts, false);
+  }
+
   global.EncodeCore = {
     makeCanvas: makeCanvas,
     fitRect: fitRect,
@@ -223,6 +250,7 @@
     crop: crop,
     cropMasked: cropMasked,
     encodeFrame: encodeFrame,
+    reencodeAgainst: reencodeAgainst,
     processSegment: processSegment
   };
 })(typeof self !== 'undefined' ? self : this);

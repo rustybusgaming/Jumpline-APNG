@@ -1,4 +1,4 @@
-/* app.js — UI, preview playback and export orchestration. */
+/* app.js: UI, preview playback and export orchestration. */
 (function () {
   'use strict';
 
@@ -44,7 +44,10 @@
     statFrames: $('#statFrames'),
     statTime: $('#statTime'),
     btnDownload: $('#btnDownload'),
-    error: $('#error')
+    btnSaveFrames: $('#btnSaveFrames'),
+    onionSkin: $('#onionSkin'),
+    error: $('#error'),
+    live: $('#live')
   };
 
   var state = {
@@ -57,7 +60,8 @@
     encoding: false,
     resultUrl: null,
     naturalW: 0,
-    naturalH: 0
+    naturalH: 0,
+    refocus: null
   };
 
   var previewCtx = el.preview.getContext('2d');
@@ -79,6 +83,21 @@
   function showError(msg) {
     el.error.textContent = msg;
     el.error.hidden = !msg;
+    el.error.className = 'notice error';
+  }
+
+  /* Say something to screen readers without changing the visible page. */
+  var announceTimer = null;
+  function announce(msg) {
+    if (!el.live) return;
+    clearTimeout(announceTimer);
+    // Re-announce identical text by clearing first.
+    el.live.textContent = '';
+    announceTimer = setTimeout(function () { el.live.textContent = msg; }, 60);
+  }
+
+  function prefersReducedMotion() {
+    return window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
   }
 
   /* -------------------------------------------------------------- settings */
@@ -114,9 +133,10 @@
         filterMode: el.filterMode.value,
         threads: el.threads.value,
         optimize: el.optimize.checked,
-        lockAspect: el.lockAspect.checked
+        lockAspect: el.lockAspect.checked,
+        onionSkin: el.onionSkin.checked
       }));
-    } catch (e) { /* private mode, blocked storage — not worth reporting */ }
+    } catch (e) { /* private mode, blocked storage, not worth reporting */ }
   }
 
   function loadSettings() {
@@ -137,6 +157,7 @@
     if (s.threads) el.threads.value = s.threads;
     if (typeof s.optimize === 'boolean') el.optimize.checked = s.optimize;
     if (typeof s.lockAspect === 'boolean') el.lockAspect.checked = s.lockAspect;
+    if (typeof s.onionSkin === 'boolean') el.onionSkin.checked = s.onionSkin;
     syncFpsFromDelay();
     el.bgColor.disabled = el.transparent.checked;
     el.loopCount.disabled = el.loopForever.checked;
@@ -155,40 +176,106 @@
 
   /* ---------------------------------------------------------------- frames */
 
+  function padNumber(n, width) {
+    var s = String(n);
+    while (s.length < width) s = '0' + s;
+    return s;
+  }
+
+  /*
+   * An animated PNG is unpacked into its frames rather than added as a still,
+   * so an export can be opened again and re-edited.
+   */
+  async function splitAnimation(file, bytes) {
+    var decoded = await self.APNGDecode.decode(bytes);
+    var stem = (file.name || 'animation').replace(/\.[^.]+$/, '');
+    var out = [];
+    for (var i = 0; i < decoded.length; i++) {
+      var f = decoded[i];
+      var canvas = document.createElement('canvas');
+      canvas.width = f.width;
+      canvas.height = f.height;
+      canvas.getContext('2d').putImageData(new ImageData(f.rgba, f.width, f.height), 0, 0);
+      var blob = await new Promise(function (res, rej) {
+        canvas.toBlob(function (b) { b ? res(b) : rej(new Error('Could not rebuild a frame.')); }, 'image/png');
+      });
+      out.push({
+        name: stem + '-' + padNumber(i + 1, 3) + '.png',
+        blob: blob,
+        delay: f.delay
+      });
+    }
+    return out;
+  }
+
+  /* Normalise everything that was dropped into a flat list of frame sources. */
+  async function collectSources(list, failed, notes) {
+    var delay = currentDelay();
+    var sources = [];
+    for (var i = 0; i < list.length; i++) {
+      var file = list[i];
+      var isPng = /png/i.test(file.type || '') || /\.png$/i.test(file.name || '');
+      if (isPng) {
+        try {
+          var bytes = new Uint8Array(await file.arrayBuffer());
+          if (self.APNGDecode.isAnimated(bytes)) {
+            var frames = await splitAnimation(file, bytes);
+            notes.push((file.name || 'animation') + ' (' + frames.length + ' frames)');
+            for (var j = 0; j < frames.length; j++) sources.push(frames[j]);
+            continue;
+          }
+        } catch (e) {
+          failed.push((file.name || 'image') + ': ' + (e && e.message || e));
+          continue;
+        }
+      }
+      sources.push({ name: file.name || 'frame', blob: file, delay: delay });
+    }
+    return sources;
+  }
+
   async function addFiles(files) {
     var list = Array.prototype.slice.call(files).filter(function (f) {
       return f.type ? /^image\//.test(f.type) : /\.(png|jpe?g|gif|webp|bmp|avif)$/i.test(f.name);
     });
-    if (!list.length) return;
+    if (!list.length) {
+      showError('Those files are not images Jumpline can read. Try PNG, JPEG, WebP, GIF or BMP.');
+      return;
+    }
 
     list.sort(function (a, b) { return naturalCompare(a.name || '', b.name || ''); });
 
     var wasEmpty = state.frames.length === 0;
-    var delay = currentDelay();
     var failed = [];
+    var notes = [];
+    var added = 0;
+    var sources = await collectSources(list, failed, notes);
 
-    for (var i = 0; i < list.length; i++) {
-      var file = list[i];
+    for (var i = 0; i < sources.length; i++) {
+      var src = sources[i];
       var bitmap;
       try {
-        bitmap = await createImageBitmap(file);
+        bitmap = await createImageBitmap(src.blob);
       } catch (e) {
-        failed.push(file.name || 'image');
+        failed.push(src.name);
         continue;
       }
       state.frames.push({
         id: state.nextId++,
-        name: file.name || ('frame-' + state.nextId),
-        file: file,
+        name: src.name,
+        file: src.blob,
         bitmap: bitmap,
         width: bitmap.width,
         height: bitmap.height,
-        delay: delay,
+        delay: src.delay,
         thumb: makeThumb(bitmap)
       });
+      added++;
     }
 
-    showError(failed.length ? 'Could not read: ' + failed.join(', ') : '');
+    showError(failed.length
+      ? (failed.length === 1 ? 'Could not read ' + failed[0] : 'Could not read ' + failed.length + ' files: ' + failed.join(', '))
+      : '');
 
     if (wasEmpty && state.frames.length) {
       state.naturalW = state.frames[0].width;
@@ -197,6 +284,9 @@
       el.outH.value = String(state.naturalH);
     }
     refresh();
+    announce(notes.length
+      ? 'Opened ' + notes.join(', ') + '. ' + state.frames.length + ' frames in total.'
+      : 'Added ' + added + (added === 1 ? ' frame. ' : ' frames. ') + state.frames.length + ' in total.');
   }
 
   function makeThumb(bitmap) {
@@ -209,14 +299,37 @@
     return c;
   }
 
+  var ICON_PATHS = {
+    left: '<path d="M15 5L8 12l7 7"/>',
+    right: '<path d="M9 5l7 7-7 7"/>',
+    dup: '<path d="M8 8h11v11H8z"/><path d="M5 16V5h11"/>',
+    del: '<path d="M6 6l12 12M18 6L6 18"/>'
+  };
+
+  function iconSvg(kind) {
+    return '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" ' +
+      'stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">' +
+      ICON_PATHS[kind] + '</svg>';
+  }
+
   function renderStrip() {
     el.strip.textContent = '';
     state.frames.forEach(function (frame, i) {
       var li = document.createElement('li');
       li.className = 'frame';
       li.draggable = true;
+      li.tabIndex = 0;
       li.dataset.index = String(i);
-      li.title = frame.name + ' — ' + frame.width + '×' + frame.height;
+      li.title = frame.name + ', ' + frame.width + '×' + frame.height;
+      li.setAttribute('aria-label',
+        'Frame ' + (i + 1) + ' of ' + state.frames.length + ', ' + frame.delay + ' milliseconds, ' + frame.name +
+        '. Arrow keys move it, Delete removes it.');
+      li.addEventListener('keydown', function (e) {
+        if (e.target !== li) return;                 // let the delay field keep its own keys
+        if (e.key === 'ArrowLeft') { e.preventDefault(); frameAction('left', i); }
+        else if (e.key === 'ArrowRight') { e.preventDefault(); frameAction('right', i); }
+        else if (e.key === 'Delete' || e.key === 'Backspace') { e.preventDefault(); frameAction('del', i); }
+      });
 
       var thumb = document.createElement('div');
       thumb.className = 'thumb';
@@ -235,9 +348,12 @@
       input.max = '65535';
       input.step = '10';
       input.value = String(frame.delay);
+      input.setAttribute('aria-label', 'Hold time for frame ' + (i + 1) + ' in milliseconds');
       input.addEventListener('change', function () {
         frame.delay = clamp(Math.round(Number(input.value) || 0), 0, 65535);
         input.value = String(frame.delay);
+        refresh();
+        announce('Frame ' + (i + 1) + ' held for ' + frame.delay + ' milliseconds.');
       });
       input.addEventListener('pointerdown', function (e) { e.stopPropagation(); });
       var unit = document.createElement('em');
@@ -248,13 +364,14 @@
 
       var actions = document.createElement('div');
       actions.className = 'frame-actions';
-      [['left', '◀', 'Move left'], ['dup', '⧉', 'Duplicate'], ['del', '✕', 'Remove'], ['right', '▶', 'Move right']]
+      [['left', 'Move left'], ['dup', 'Duplicate'], ['del', 'Remove'], ['right', 'Move right']]
         .forEach(function (spec) {
           var b = document.createElement('button');
           b.type = 'button';
           b.dataset.act = spec[0];
-          b.textContent = spec[1];
-          b.title = spec[2];
+          b.innerHTML = iconSvg(spec[0]);
+          b.title = spec[1];
+          b.setAttribute('aria-label', spec[1] + ', frame ' + (i + 1));
           b.addEventListener('click', function () { frameAction(spec[0], i); });
           actions.appendChild(b);
         });
@@ -301,10 +418,17 @@
 
   function frameAction(act, i) {
     var f = state.frames[i];
+    var says = '';
     if (act === 'del') {
       state.frames.splice(i, 1);
-      if (f.bitmap) f.bitmap.close();
+      // Duplicated frames share one bitmap, so only close the last user of it.
+      var stillUsed = state.frames.some(function (o) { return o.bitmap === f.bitmap; });
+      if (!stillUsed && f.bitmap) f.bitmap.close();
+      state.refocus = Math.min(i, state.frames.length - 1);
+      says = 'Removed frame ' + (i + 1) + '. ' + state.frames.length + ' left.';
     } else if (act === 'dup') {
+      state.refocus = i + 1;
+      says = 'Duplicated frame ' + (i + 1) + '.';
       state.frames.splice(i + 1, 0, {
         id: state.nextId++,
         name: f.name,
@@ -318,12 +442,17 @@
       });
     } else if (act === 'left' && i > 0) {
       state.frames.splice(i - 1, 0, state.frames.splice(i, 1)[0]);
+      state.refocus = i - 1;
+      says = 'Moved to position ' + i + ' of ' + state.frames.length + '.';
     } else if (act === 'right' && i < state.frames.length - 1) {
       state.frames.splice(i + 1, 0, state.frames.splice(i, 1)[0]);
+      state.refocus = i + 1;
+      says = 'Moved to position ' + (i + 2) + ' of ' + state.frames.length + '.';
     } else {
       return;
     }
     refresh();
+    if (says) announce(says);
   }
 
   function highlightCurrent() {
@@ -341,9 +470,17 @@
     el.scrub.max = String(Math.max(0, n - 1));
     if (state.playIndex >= n) state.playIndex = 0;
     el.scrub.value = String(state.playIndex);
+    el.btnSaveFrames.disabled = n === 0 || state.encoding;
     renderStrip();
     updatePlayLabel();
     drawPreview();
+
+    // Rebuilding the strip drops focus, so put it back where the user was.
+    if (state.refocus !== null && state.refocus !== undefined) {
+      var target = el.strip.children[state.refocus];
+      if (target) target.focus();
+      state.refocus = null;
+    }
   }
 
   function totalDuration() {
@@ -370,7 +507,18 @@
     previewCtx.clearRect(0, 0, opts.width, opts.height);
     var frame = state.frames[state.playIndex];
     if (!frame) return;
-    self.EncodeCore.paint(previewCtx, frame.bitmap, opts);
+
+    if (opts.background) {
+      previewCtx.fillStyle = opts.background;
+      previewCtx.fillRect(0, 0, opts.width, opts.height);
+    }
+    if (el.onionSkin.checked && state.frames.length > 1) {
+      var back = state.frames[(state.playIndex - 1 + state.frames.length) % state.frames.length];
+      previewCtx.globalAlpha = 0.28;
+      self.EncodeCore.paint(previewCtx, back.bitmap, opts, true);
+      previewCtx.globalAlpha = 1;
+    }
+    self.EncodeCore.paint(previewCtx, frame.bitmap, opts, true);
   }
 
   function tick(ts) {
@@ -546,6 +694,31 @@
 
       results.sort(function (a, b) { return a.index - b.index; });
 
+      /*
+       * Each segment opened with a full key frame so segments could be encoded
+       * at the same time. Now that they are all back, re-encode those few
+       * boundary frames as deltas and keep whichever is smaller.
+       */
+      if (opts.optimize && segments.length > 1) {
+        for (var si = 1; si < segments.length; si++) {
+          var at = segments[si].start;
+          var current = results[at];
+          if (!current || current.skip || current.index !== at) continue;
+          try {
+            var delta = await self.EncodeCore.reencodeAgainst(
+              state.frames[at - 1].file, state.frames[at].file, opts);
+            if (!delta) {
+              results[at] = { index: at, skip: true };
+            } else if (delta.data.length < current.data.length) {
+              delta.index = at;
+              results[at] = delta;
+            }
+          } catch (err) {
+            /* Keep the key frame we already have; it is correct, just larger. */
+          }
+        }
+      }
+
       /* Fold skipped (identical) frames into the previous frame's hold time. */
       var apngFrames = [];
       for (var i = 0; i < results.length; i++) {
@@ -588,6 +761,56 @@
     }
   }
 
+  function downloadBlob(blob, name) {
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement('a');
+    a.href = url;
+    a.download = name;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(function () { URL.revokeObjectURL(url); }, 10000);
+  }
+
+  /* Write every rendered frame into a zip, at the chosen output size. */
+  async function saveFrames() {
+    if (!state.frames.length || state.encoding) return;
+
+    var opts = readOpts();
+    var label = el.btnSaveFrames.textContent;
+    el.btnSaveFrames.disabled = true;
+    el.btnSaveFrames.textContent = 'Packing…';
+    showError('');
+
+    try {
+      var canvas = self.EncodeCore.makeCanvas(opts.width, opts.height);
+      var ctx = canvas.getContext('2d', { willReadFrequently: true });
+      var entries = [];
+
+      for (var i = 0; i < state.frames.length; i++) {
+        self.EncodeCore.paint(ctx, state.frames[i].bitmap, opts);
+        var blob = canvas.convertToBlob
+          ? await canvas.convertToBlob({ type: 'image/png' })
+          : await new Promise(function (res, rej) {
+            canvas.toBlob(function (b) { b ? res(b) : rej(new Error('Could not render a frame.')); }, 'image/png');
+          });
+        entries.push({
+          name: padNumber(i + 1, 3) + '.png',
+          data: new Uint8Array(await blob.arrayBuffer())
+        });
+      }
+
+      var stem = (el.fileName.value || 'animation').trim().replace(/\.png$/i, '') || 'animation';
+      downloadBlob(self.Zip.build(entries), stem + '-frames.zip');
+      announce('Saved ' + entries.length + ' frames as a zip.');
+    } catch (err) {
+      showError('Could not save the frames: ' + String(err && err.message || err));
+    } finally {
+      el.btnSaveFrames.textContent = label;
+      el.btnSaveFrames.disabled = state.frames.length === 0;
+    }
+  }
+
   function showResult(blob, opts, frameCount, ms) {
     if (state.resultUrl) URL.revokeObjectURL(state.resultUrl);
     state.resultUrl = URL.createObjectURL(blob);
@@ -604,6 +827,8 @@
     el.btnDownload.href = state.resultUrl;
     el.btnDownload.download = name;
     el.result.hidden = false;
+    announce('Built ' + frameCount + (frameCount === 1 ? ' frame' : ' frames') +
+      ' at ' + opts.width + ' by ' + opts.height + ', ' + formatBytes(blob.size) + '. Ready to download.');
   }
 
   /* ------------------------------------------------------------------ wire */
@@ -691,12 +916,14 @@
       showError('');
       el.result.hidden = true;
       refresh();
+      announce('Cleared every frame.');
     });
 
     el.btnPlay.addEventListener('click', function () {
       state.playing = !state.playing;
       el.btnPlay.textContent = state.playing ? 'Pause' : 'Play';
       state.lastTs = 0;
+      announce(state.playing ? 'Playing.' : 'Paused on frame ' + (state.playIndex + 1) + '.');
     });
     el.scrub.addEventListener('input', function () {
       state.playing = false;
@@ -754,6 +981,7 @@
       var d = currentDelay();
       state.frames.forEach(function (f) { f.delay = d; });
       refresh();
+      announce('Every frame now holds for ' + d + ' milliseconds.');
     });
 
     [el.filterMode, el.threads, el.optimize, el.lockAspect].forEach(function (input) {
@@ -761,10 +989,19 @@
     });
 
     el.btnExport.addEventListener('click', doExport);
+    el.btnSaveFrames.addEventListener('click', saveFrames);
+    el.onionSkin.addEventListener('change', function () { drawPreview(); saveSettings(); });
 
     if (!self.PNG.hasCompressionStream) {
       showError('Heads up: this browser has no CompressionStream, so Jumpline falls back to a slower encoder. ' +
         'Everything still works, but a recent Chrome, Firefox or Safari will be much faster.');
+    }
+
+    // Someone who asked for less motion should not be met with a looping
+    // animation; they can still start it themselves.
+    if (prefersReducedMotion()) {
+      state.playing = false;
+      el.btnPlay.textContent = 'Play';
     }
 
     refresh();
