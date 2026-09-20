@@ -822,8 +822,8 @@
     el.statFrames.textContent = String(frameCount);
     el.statTime.textContent = ms < 1000 ? Math.round(ms) + ' ms' : (ms / 1000).toFixed(2) + ' s';
 
-    var name = (el.fileName.value || 'animation.apng').trim();
-    if (!/\.apng$/i.test(name)) name = name.replace(/\.png$/i, '') + '.apng';
+    var name = (el.fileName.value || 'animation.png').trim();
+    if (!/\.png$/i.test(name)) name = name.replace(/\.apng$/i, '') + '.png';
     el.btnDownload.href = state.resultUrl;
     el.btnDownload.download = name;
     el.result.hidden = false;
