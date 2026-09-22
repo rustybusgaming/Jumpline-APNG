@@ -1,10 +1,11 @@
-# Jumpline APNG
+# Zoetrope
 
-A single-page web app that turns a pile of image frames into an **animated PNG**.
+Zoetrope is a single-page web app that turns a pile of image frames into an
+**animated PNG**.
 No upload, no server, no build step, no dependencies: it is plain HTML, CSS and
 JavaScript, so you can drop it on GitHub Pages and it just works.
 
-![runs entirely in your browser](https://img.shields.io/badge/runs-100%25%20in%20your%20browser-E8453C)
+![runs entirely in your browser](https://img.shields.io/badge/runs-100%25%20in%20your%20browser-2F6B52)
 
 ## Features
 
@@ -127,7 +128,7 @@ reader against that independent decoder, and checks the zip writer's container.
 | File | Role |
 | --- | --- |
 | `index.html` | Markup for the whole app |
-| `assets/styles.css` | The cartoon theme |
+| `assets/styles.css` | The theme |
 | `src/png.js` | CRC32, chunk writing, PNG scanline filters, deflate, APNG assembly |
 | `src/encode-core.js` | Frame rendering, inter-frame diffing, per-frame encoding |
 | `src/apng-decode.js` | Reads an animated PNG back into composited frames |
@@ -149,9 +150,10 @@ Discord emoji or a sticker. Building files needs a browser with
 fall back to a slower path automatically. Reopening an animated PNG needs
 `DecompressionStream`, available in the same versions.
 
-The cartoon headings use [Luckiest Guy](https://fonts.google.com/specimen/Luckiest+Guy)
-and [Baloo 2](https://fonts.google.com/specimen/Baloo+2) from Google Fonts, with
-system fallbacks if those cannot be reached.
+Type is [Source Serif 4](https://fonts.google.com/specimen/Source+Serif+4) for
+headings and [IBM Plex Sans](https://fonts.google.com/specimen/IBM+Plex+Sans)
+for the interface, both from Google Fonts, with system fallbacks if those
+cannot be reached.
 
 ## Licence
 
